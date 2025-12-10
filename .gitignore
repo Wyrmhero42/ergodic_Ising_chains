@@ -56,7 +56,6 @@ docs/_build/
 testfile
 output
 report
-*.sh
 *.npz
 .DS_Store
 
