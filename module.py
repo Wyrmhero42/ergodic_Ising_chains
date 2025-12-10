@@ -3,6 +3,7 @@ import h5py
 import numpy as np
 import multiprocessing
 
+from scipy.sparse import csr_matrix
 from scipy.optimize import fsolve
 from scipy.linalg import eigvals
 from numpy.linalg import matrix_power
@@ -23,260 +24,150 @@ def get_path():  # choose path of ETH file
         fh.close()
     return path
 
-
-def save_momentum_states_and_symmetries(k, P, jmax, basis, sym):
-    print('saving states...', flush=True)
+def save_custom_data(hdf_path, data, compressed=True):
+    print(f'saving {hdf_path} ...', flush=True)
     path = get_path()
     hdf = h5py.File(path, 'a')
     try:
-        hdf.create_dataset(
-            '/Periodic/States/States_Periodic_pa_tb_k=%1.0f' % k + '_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '.h5',
-            data=basis)
-        hdf.create_dataset(
-            '/Periodic/States/Sym_Periodic_pa_tb_k=%1.0f' % k + '_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '.h5',
-            data=sym)
+        hdf.create_dataset(hdf,data=data, compression="gzip" if compressed else None)
         hdf.close()
     except Exception as e:
         print(e)
         hdf.close()
-
-
-def import_momentum_states(k, P, jmax):
-    print('importing states...', flush=True)
+        
+def save_Hamiltonian_custom(type_of_system_str, param_str, Hamiltonian, sparse_csr=False):
+    print(f'saving Hamiltonian...', flush=True)
     path = get_path()
-    hdf = h5py.File(path, 'r')
-    if 'Periodic/States' in hdf:
-        G1 = hdf.get('Periodic/States')
-        B = np.array(G1.get('States_Periodic_pa_tb_k=%1.0f' % k + '_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '.h5'))
-        hdf.close()
-        return B
-    else:
-        hdf.close()
-        print('**ERROR**')
-        exit()
+    with h5py.File(path, 'a') as hdf:
+
+        # Base parent path
+        base_group = os.path.join(type_of_system_str, 'Hamiltonians')
+        # Ensure base group exists
+        hdf.require_group(base_group)
+
+        try:
+            if sparse_csr:
+                if not isinstance(Hamiltonian, csr_matrix):
+                    raise ValueError("Hamiltonian must be a csr_matrix when sparse_csr=True")
+                
+                # Group name based on your naming
+                csr_group_name = f'Hamiltonian_{type_of_system_str}_{param_str}_sparse'
+                group_path = os.path.join(base_group, csr_group_name)
+                # If group already exists, remove it so we overwrite
+                if group_path in hdf:
+                    del hdf[group_path]
+                grp = hdf.create_group(group_path)
+                
+                # Save CSR components
+                grp.create_dataset('data', data=Hamiltonian.data, compression="gzip")
+                grp.create_dataset('indices', data=Hamiltonian.indices, compression="gzip")
+                grp.create_dataset('indptr', data=Hamiltonian.indptr, compression="gzip")
+                grp.attrs['shape'] = Hamiltonian.shape
+            else:
+                # Dense Hamiltonian saved directly
+                dataset_name = f'Hamiltonian_{type_of_system_str}_{param_str}.h5'
+                dataset_path = os.path.join(base_group, dataset_name)
+                hdf.create_dataset(dataset_path, data=Hamiltonian, compression="gzip")
+        except Exception as e:
+            print(e, flush=True)
 
 
-def import_symmetries(k, P, jmax):
-    print('importing symmetries...', flush=True)
+def load_Hamiltonian_custom(type_of_system_str, param_str, sparse_csr=False):
+    print(f'loading Hamiltonian...', flush=True)
     path = get_path()
-    hdf = h5py.File(path, 'r')
-    if 'Periodic/States' in hdf:
-        G1 = hdf.get('Periodic/States')
-        Sym = np.array(G1.get('Sym_Periodic_pa_tb_k=%1.0f' % k + '_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '.h5'))
-        hdf.close()
-        return Sym
-    else:
-        hdf.close()
-        print('**ERROR**')
-        exit()
+    with h5py.File(path, 'r') as hdf:
+        base_group = os.path.join(type_of_system_str, 'Hamiltonians')
+        if sparse_csr:
+            group_name = f'Hamiltonian_{type_of_system_str}_{param_str}_sparse'
+            grp = hdf[os.path.join(base_group, group_name)]
+            data = grp['data'][:]
+            indices = grp['indices'][:]
+            indptr = grp['indptr'][:]
+            shape = grp.attrs['shape'] 
+            Hamiltonian = csr_matrix((data, indices, indptr), shape=shape)
+        else:
+            dataset_name = f'Hamiltonian_{type_of_system_str}_{param_str}.h5'
+            Hamiltonian = hdf[os.path.join(base_group, dataset_name)][:]
+        return Hamiltonian
 
-
-def save_plaquette_term(P, jmax, HM):
-    print('saving plaquette term...', flush=True)
+        
+def save_eigensystem_custom(type_of_system_str, param_str, eigenvalues, eigenvectors):
+    print(f'saving eigensystem...', flush=True)
     path = get_path()
-    hdf = h5py.File(path, 'a')
-    try:
-        hdf.create_dataset(
-            '/Periodic/Plaquette_term/Plaquette_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '.h5', data=HM,
-            compression="gzip")
-        hdf.close()
-    except Exception as e:
-        print(e)
-        hdf.close()
+    with h5py.File(path, 'a') as hdf:
+        # joined path strings
+        path_eigenvals = os.path.join(type_of_system_str, 'Eigenvalues', f'Eigenvalues_{type_of_system_str}_{param_str}.h5')
+        path_eigenvecs = os.path.join(type_of_system_str, 'Eigenvectors', f'Eigenvectors_{type_of_system_str}_{param_str}.h5')
+        try:
+            hdf.create_dataset(path_eigenvals,data=eigenvalues, compression="gzip")
+            hdf.create_dataset(path_eigenvecs,data=eigenvectors, compression="gzip")
+        except Exception as e:
+            print(e, flush=True)
 
-
-def import_plaquette_term(P, jmax):
-    print('importing plaquette term...', flush=True)
+def load_eigensystem_custom(type_of_system_str, param_str):
+    print(f'loading eigensystem...', flush=True)
     path = get_path()
-    hdf = h5py.File(path, 'r')
-    if 'Periodic/Plaquette_term' in hdf:
-        G2 = hdf.get('Periodic/Plaquette_term')
-        HM = np.array(G2.get('Plaquette_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '.h5'))
-        hdf.close()
-        return HM
-    else:
-        hdf.close()
-        print('**ERROR**')
-        exit()
-
-
-def save_eigensystem(P, jmax, g2, w, v):
-    print('saving eigensystem...', flush=True)
+    with h5py.File(path, 'r') as hdf:
+        # joined path strings
+        path_eigenvals = os.path.join(type_of_system_str, 'Eigenvalues', f'Eigenvalues_{type_of_system_str}_{param_str}.h5')
+        path_eigenvecs = os.path.join(type_of_system_str, 'Eigenvectors', f'Eigenvectors_{type_of_system_str}_{param_str}.h5')
+        eigenvalues = hdf[path_eigenvals][:]
+        eigenvectors = hdf[path_eigenvecs][:]
+        return eigenvalues, eigenvectors
+    
+def load_eigenvalues_custom(type_of_system_str, param_str):
+    print(f'loading eigenvalues...', flush=True)
     path = get_path()
-    hdf = h5py.File(path, 'a')
-    try:
-        hdf.create_dataset('/Periodic/Eigenvalues/Eigenvalues_Periodic_pa=1_tb=1_k=0_P=%1.0f'%P+'_jmax=%1.1f'%jmax+'_g2=%1.2f'%g2+'.h5',data=w)
-        hdf.create_dataset('/Periodic/Eigenvectors/Eigenvectors_Periodic_pa=1_tb=1_k=0_P=%1.0f'%P+'_jmax=%1.1f'%jmax+'_g2=%1.2f'%g2+'.h5',data=v, compression="gzip")
-        hdf.close()
-    except Exception as e:
-        print(e)
-        hdf.close()
+    with h5py.File(path, 'r') as hdf:
+        # joined path string
+        path_eigenvals = os.path.join(type_of_system_str, 'Eigenvalues', f'Eigenvalues_{type_of_system_str}_{param_str}.h5')
+        eigenvalues = hdf[path_eigenvals][:]
+        return eigenvalues
+
+# def save_eigensystem(P, jmax, g2, w, v):
+#     print('saving eigensystem...', flush=True)
+#     path = get_path()
+#     hdf = h5py.File(path, 'a')
+#     try:
+#         hdf.create_dataset('/Periodic/Eigenvalues/Eigenvalues_Periodic_pa=1_tb=1_k=0_P=%1.0f'%P+'_jmax=%1.1f'%jmax+'_g2=%1.2f'%g2+'.h5',data=w)
+#         hdf.create_dataset('/Periodic/Eigenvectors/Eigenvectors_Periodic_pa=1_tb=1_k=0_P=%1.0f'%P+'_jmax=%1.1f'%jmax+'_g2=%1.2f'%g2+'.h5',data=v, compression="gzip")
+#         hdf.close()
+#     except Exception as e:
+#         print(e)
+#         hdf.close()
 
 
-def import_eigenvalues(P, jmax, g2):
-    print('importing eigenvalues...', flush=True)
-    path = get_path()
-    hdf = h5py.File(path, 'r')
-    filename = 'Periodic/Eigenvalues/Eigenvalues_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_g2=%1.2f' % g2 + '.h5'
-    if filename in hdf:
-        w = np.array(hdf.get(filename))
-        hdf.close()
-        return w
-    hdf.close()
-    filename = './per_output/w_spectrum_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_g2=%1.2f' % g2 + '.npy'
-    if os.path.exists(filename):
-        w = np.load(filename)
-        return w
-    print('**ERROR**')
-    exit()
+# def import_eigenvalues(P, jmax, g2):
+#     print('importing eigenvalues...', flush=True)
+#     path = get_path()
+#     hdf = h5py.File(path, 'r')
+#     filename = 'Periodic/Eigenvalues/Eigenvalues_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_g2=%1.2f' % g2 + '.h5'
+#     if filename in hdf:
+#         w = np.array(hdf.get(filename))
+#         hdf.close()
+#         return w
+#     hdf.close()
+#     filename = './per_output/w_spectrum_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_g2=%1.2f' % g2 + '.npy'
+#     if os.path.exists(filename):
+#         w = np.load(filename)
+#         return w
+#     print('**ERROR**')
+#     exit()
 
 
-def import_eigenvectors(P, jmax, g2):
-    print('importing eigenvectors...', flush=True)
-    path = get_path()
-    hdf = h5py.File(path, 'r')
-    filename = 'Periodic/Eigenvectors/Eigenvectors_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_g2=%1.2f' % g2 + '.h5'
-    if filename in hdf:
-        v = np.array(hdf.get(filename))
-        hdf.close()
-        return v
-    else:
-        hdf.close()
-        print('**ERROR**')
-        exit()
-
-
-def save_rdm_indices(k, P, jmax, C1, C2, all_indices, iu1_0, iu1_1, dim):
-    print('saving RDM indices...', flush=True)
-    path = get_path()
-    hdf = h5py.File(path, 'a')
-    EEpath = 'Periodic/EEstuff_k=%1.0f' % k + '_P=%1.0f' % P + '_jmax=%1.1f' % jmax
-    try:
-        hdf.create_group(EEpath)
-    except Exception as e:
-        print(e)
-    try:
-        # dt = h5py.vlen_dtype(np.dtype('i,i'))
-        # dset = hdf.create_dataset(
-        #     EEpath+'/RDM_indices_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5', (len(all_indices),), dtype=dt, compression="gzip")
-        # for i, sublist in enumerate(all_indices):
-        #     dset[i] = np.array(sublist, dtype='i,i')
-        ###
-        # Flatten the data
-        flat_data = [item for sublist in all_indices for item in sublist]
-        offsets = np.zeros(len(all_indices) + 1, dtype='int32')
-        # Compute offsets
-        count = 0
-        for i, sublist in enumerate(all_indices):
-            count += len(sublist)
-            offsets[i + 1] = count
-        flat_data = np.array(flat_data, dtype='int32')
-        ###
-        hdf.create_dataset(
-            EEpath + '/flat_data_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5',
-            data=flat_data,
-            compression="gzip")
-        hdf.create_dataset(
-            EEpath + '/offsets_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5',
-            data=offsets)
-        hdf.create_dataset(
-            EEpath+'/iu1_0_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5', data=iu1_0,
-            compression="gzip")
-        hdf.create_dataset(
-            EEpath+'/iu1_1_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5', data=iu1_1,
-            compression="gzip")
-        hdf.create_dataset(
-            EEpath+'/dimRDM_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5', data=dim)
-    except Exception as e:
-        print(e)
-    hdf.close()
-
-
-def import_rdm_indices(k, P, jmax, C1, C2):  # returns 5 objects
-    print('importing RDM indices...', flush=True)
-    path = get_path()
-    f = h5py.File(path, 'r')
-    EEpath = 'Periodic/EEstuff_k=%1.0f' % k + '_P=%1.0f' % P + '_jmax=%1.1f' % jmax
-    try:
-        # dset = f[
-        #     EEpath + '/RDM_indices_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5']
-        # # Iterate through the dataset
-        # all_indices = [0] * len(dset)
-        # for i in range(len(dset)):
-        #     item = dset[i]
-        #     # Convert to list of tuples
-        #     tuples_list = [tuple(t) for t in item]
-        #     all_indices[i] = tuples_list
-        #
-        data = np.array(
-            f.get(
-                EEpath + '/flat_data_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5'))
-        offsets = np.array(
-            f.get(
-                EEpath + '/offsets_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5'))
-        # lists = [data[offsets[i]:offsets[i + 1]] for i in range(len(offsets) - 1)]
-        # all_indices = [[tuple(x) for x in sublist] for sublist in lists]
-
-        iu1_0 = np.array(
-            f.get(
-                EEpath + '/iu1_0_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5'))
-        iu1_1 = np.array(
-            f.get(
-                EEpath + '/iu1_1_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5'))
-        dim = np.array(f.get(
-            EEpath + '/dimRDM_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '.h5'))
-        f.close()
-        return data, offsets, iu1_0, iu1_1, dim
-    except Exception as e:
-        print(e)
-        f.close()
-
-
-def save_rdm_spectrum(P, jmax, g2, C1, C2, spectrum):  # save the whole spectrum of reduced density matrices (compressed)
-    print('saving rdm spectrum...', flush=True)
-    path = get_path()
-    hdf = h5py.File(path, 'a')
-    try:
-        hdf.create_dataset('/Periodic/RDMspec/rdm_spectrum_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '_g2=%1.2f' % g2+'.h5', data=spectrum, compression="gzip")
-        hdf.close()
-    except Exception as e:
-        print(e)
-        hdf.close()
-
-
-def import_rdm_spectrum(P, jmax, g2, C1, C2):
-    print('importing rdm spectrum...', flush=True)
-    path = get_path()
-    hdf = h5py.File(path, 'r')
-    filename = '/Periodic/RDMspec/rdm_spectrum_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_C1=%1.0f' % C1 + '_C2=%1.0f' % C2 + '_g2=%1.2f' % g2+'.h5'
-    if filename in hdf:
-        spec = np.array(hdf.get(filename))
-        hdf.close()
-        return spec
-    else:
-        hdf.close()
-        print('**ERROR**')
-        exit()
-
-
-###########################################
-# STATE VISUALIZATION
-###########################################
-
-def draw_chain(state):
-    spaces = 8
-    lower = state[0::3]
-    lower = (" "*spaces).join(f"{num:.1f}" for num in lower)
-    upper = state[1::3]
-    upper = (" "*spaces).join(f"{num:.1f}" for num in upper)
-    mid = state[2::3]
-    mid = " "*(round(spaces/2)+1)+"|"+(" "*(spaces-1)+"|").join(f"{num:.1f}" for num in mid)
-
-    print(upper, flush=True)
-    print('-'*len(lower)+"-"*round(spaces/2), flush=True)
-    print(mid, flush=True)
-    print('-' * len(upper)+"-"*round(spaces/2), flush=True)
-    print(lower, flush=True)
+# def import_eigenvectors(P, jmax, g2):
+#     print('importing eigenvectors...', flush=True)
+#     path = get_path()
+#     hdf = h5py.File(path, 'r')
+#     filename = 'Periodic/Eigenvectors/Eigenvectors_Periodic_pa=1_tb=1_k=0_P=%1.0f' % P + '_jmax=%1.1f' % jmax + '_g2=%1.2f' % g2 + '.h5'
+#     if filename in hdf:
+#         v = np.array(hdf.get(filename))
+#         hdf.close()
+#         return v
+#     else:
+#         hdf.close()
+#         print('**ERROR**')
+#         exit()
 
 
 ###########################################

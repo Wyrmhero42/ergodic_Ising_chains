@@ -112,7 +112,7 @@ def tilted_field_Ising_Hamiltonian_sparse(L, J_z, h_x, h_z, print_info=True, dty
         
         print(f"H shape: {Hamiltonian.shape}")
         print(f"non-zeros: {num_nonzero_elements} / {total_entries} (density = {density:.3e})")
-        print(f"CSR memory: {mem_bytes / 1024**2  :.2f} MB")
+        print(f"CSR memory: {mem_bytes / 1024**2  :.2f} MB, dense matrix: {total_entries * 8 / 1024**3 :.2f} GB")
         print(f"H build time:", elapsed)
         
     return Hamiltonian.astype(dtype=dtype)
@@ -178,13 +178,8 @@ def XZ_transverse_field_Ising_Hamiltonian_sparse(L, J_x, J_z, h_x, print_info=Tr
         
         print(f"H shape: {Hamiltonian.shape}")
         print(f"non-zeros: {num_nonzero_elements} / {total_entries} (density = {density:.3e})")
-        print(f"CSR memory: {mem_bytes / 1024**2  :.2f} MB")
+        print(f"CSR memory: {mem_bytes / 1024**2  :.2f} MB, dense matrix: {total_entries * 8 / 1024**3 :.2f} GB")
         print(f"H build time:", elapsed)
         
     return Hamiltonian.astype(dtype=dtype)
     
-    
-
-H = tilted_field_Ising_Hamiltonian_sparse(20, J_z=1.0, h_x=0.5, h_z=0.3)
-# for XZ Hamiltonian later
-H_xz = XZ_transverse_field_Ising_Hamiltonian_sparse(20, J_x=1.0, J_z=1.0, h_x=0.5)
