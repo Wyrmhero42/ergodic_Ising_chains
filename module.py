@@ -96,8 +96,8 @@ def save_eigensystem_custom(type_of_system_str, param_str, eigenvalues, eigenvec
     path = get_path()
     with h5py.File(path, 'a') as hdf:
         # joined path strings
-        path_eigenvals = os.path.join(type_of_system_str, 'Eigenvalues', f'Eigenvalues_{type_of_system_str}_{param_str}.h5')
-        path_eigenvecs = os.path.join(type_of_system_str, 'Eigenvectors', f'Eigenvectors_{type_of_system_str}_{param_str}.h5')
+        path_eigenvals = os.path.join(type_of_system_str, 'eigenvalues', f'eigenvalues_{type_of_system_str}_{param_str}.h5')
+        path_eigenvecs = os.path.join(type_of_system_str, 'eigenvectors', f'eigenvectors_{type_of_system_str}_{param_str}.h5')
         try:
             hdf.create_dataset(path_eigenvals,data=eigenvalues, compression="gzip")
             hdf.create_dataset(path_eigenvecs,data=eigenvectors, compression="gzip")
@@ -109,8 +109,8 @@ def load_eigensystem_custom(type_of_system_str, param_str):
     path = get_path()
     with h5py.File(path, 'r') as hdf:
         # joined path strings
-        path_eigenvals = os.path.join(type_of_system_str, 'Eigenvalues', f'Eigenvalues_{type_of_system_str}_{param_str}.h5')
-        path_eigenvecs = os.path.join(type_of_system_str, 'Eigenvectors', f'Eigenvectors_{type_of_system_str}_{param_str}.h5')
+        path_eigenvals = os.path.join(type_of_system_str, 'eigenvalues', f'eigenvalues_{type_of_system_str}_{param_str}.h5')
+        path_eigenvecs = os.path.join(type_of_system_str, 'eigenvectors', f'eigenvectors_{type_of_system_str}_{param_str}.h5')
         eigenvalues = hdf[path_eigenvals][:]
         eigenvectors = hdf[path_eigenvecs][:]
         return eigenvalues, eigenvectors
@@ -120,7 +120,7 @@ def load_eigenvalues_custom(type_of_system_str, param_str):
     path = get_path()
     with h5py.File(path, 'r') as hdf:
         # joined path string
-        path_eigenvals = os.path.join(type_of_system_str, 'Eigenvalues', f'Eigenvalues_{type_of_system_str}_{param_str}.h5')
+        path_eigenvals = os.path.join(type_of_system_str, 'eigenvalues', f'eigenvalues_{type_of_system_str}_{param_str}.h5')
         eigenvalues = hdf[path_eigenvals][:]
         return eigenvalues
 

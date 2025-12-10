@@ -5,23 +5,23 @@ import h5py
 path = module.get_path()
 if not os.path.isfile(path):
     with h5py.File(path, 'a') as hdf:
-        hdf.create_group('Periodic/States')
-        hdf.create_group('Periodic/Eigenvalues')
-        hdf.create_group('Periodic/Eigenvectors')
-        hdf.create_group('Periodic/Plaquette_term')
-        
-        hdf.create_group('Open/States')
-        hdf.create_group('Open/Eigenvalues')
-        hdf.create_group('Open/Eigenvectors')
-        hdf.create_group('Open/Plaquette_term')
+        hdf.create_group('periodic/states')
+        hdf.create_group('periodic/eigenvalues')
+        hdf.create_group('periodic/eigenvectors')
+        hdf.create_group('periodic/plaquette_term')
+
+        hdf.create_group('open/states')
+        hdf.create_group('open/eigenvalues')
+        hdf.create_group('open/eigenvectors')
+        hdf.create_group('open/plaquette_term')
         
         hdf.create_group('Ising_XZ_trans/Hamiltonians')
-        hdf.create_group('Ising_XZ_trans/Eigenvalues')
-        hdf.create_group('Ising_XZ_trans/Eigenvectors')
-        
+        hdf.create_group('Ising_XZ_trans/eigenvalues')
+        hdf.create_group('Ising_XZ_trans/eigenvectors')
+
         hdf.create_group('Ising_tilted/Hamiltonians')
-        hdf.create_group('Ising_tilted/Eigenvalues')
-        hdf.create_group('Ising_tilted/Eigenvectors')
+        hdf.create_group('Ising_tilted/eigenvalues')
+        hdf.create_group('Ising_tilted/eigenvectors')
         hdf.close()
 
 base_dir = "output"

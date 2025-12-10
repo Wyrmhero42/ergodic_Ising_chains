@@ -34,4 +34,6 @@ if __name__ == "__main__":
     start_time = datetime.now()
     module.save_Hamiltonian_custom("Ising_tilted", param_str, H, sparse_csr=True)
     module.save_eigensystem_custom("Ising_tilted", param_str, eigvals, eigvecs)
+    if os.path.exists("output/Ising_tilted/eigenvalues"):
+        np.save(f"output/Ising_tilted/eigenvalues/eigenvalues_Ising_tilted_{param_str}.npy", eigvals)
     print(f"saving finished: {datetime.now() - start_time}", flush=True)
